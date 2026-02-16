@@ -60,7 +60,11 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
 .empty{padding:14px;border-radius:16px;border:1px dashed rgba(255,255,255,.18);color:var(--m);background:rgba(255,255,255,.02);line-height:1.35;font-size:13px}
 .toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:rgba(11,18,32,.92);border:1px solid rgba(255,255,255,.14);color:var(--t);padding:10px 12px;border-radius:14px;box-shadow:var(--sh);z-index:200;max-width:92vw;font-size:13px}
 </style>
+  <link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#0B1B3A">
 </head>
+<meta name="theme-color" content="#0B1B3A">
+>
 <body>
 <header>
   <div class="app">
@@ -750,11 +754,18 @@ $("fileRestore").addEventListener("change", async (e)=>{
   }catch(err){alert("No se pudo importar.");}
   e.target.value="";
 });
+  // init
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js");
+    });
+  }
 
-// init
-if("serviceWorker" in navigator){window.addEventListener("load", ()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
-$("monthPick").value=monthISO();
-ensureMonthlyFixedGenerated($("monthPick").value);
-renderInicio();
+  $("monthPick").value = monthISO();
+  ensureMonthlyFixedGenerated($("monthPick").value);
+  renderInicio();
 </script>
-</body></html>
+
+</body>
+</html>
+
