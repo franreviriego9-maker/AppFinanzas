@@ -432,7 +432,9 @@ ensureOptions($("fTag"), state.tags, true);
   if(!$("fFrom").value){const d=new Date();d.setDate(d.getDate()-6);$("fFrom").value=d.toISOString().slice(0,10);}
 }
 function applyInicioFilter(){
-  const list=filterTx({from:$("fFrom").value||null,to:$("fTo").value||null,tag:$("fTag").value||"all",type:$("fType").value||"all"});
+  console.log("TAG SELECT:", $("fTag").value);
+console.log("STATE TAGS:", state.tags);
+const list=filterTx({from:$("fFrom").value||null,to:$("fTo").value||null,tag:$("fTag").value||"all",type:$("fType").value||"all"});
   toast(`Filtro: ${$("fTag").value} · ${list.length} movs`);
   // actualizar gráfica según filtro
   if(chartMain){
