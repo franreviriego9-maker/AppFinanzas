@@ -110,7 +110,12 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
           <div class="kpi"><div class="label">Gastos</div><div class="value bad" id="kpiExpense">€0</div></div>
           <div class="kpi"><div class="label">Balance</div><div class="value" id="kpiBalance">€0</div><div class="muted" style="font-size:12px;margin-top:2px" id="kpiBalanceSub">—</div></div>
           <div class="kpi"><div class="label">% Ahorro</div><div class="value" id="kpiSaveRate">0%</div><div class="muted" style="font-size:12px;margin-top:2px">sobre ingresos</div></div>
-        </div>
+        </div><div class="hr"></div>
+<h2 style="margin-top:0">Gráfica</h2>
+<div style="height:220px">
+  <canvas id="chartMain"></canvas>
+</div>
+
         <div class="actions" style="margin-top:12px">
           <button class="btn primary" id="btnVoiceHome">🎙️ Apuntar por voz</button>
           <button class="btn" id="btnVoiceHelp">Cómo decirlo</button>
@@ -260,6 +265,7 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
   <button class="navBtn" data-view="fijos">Fijos</button>
   <button class="navBtn" data-view="listas">Listas</button>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 const KEY="finanzas_pwa_v3";
@@ -753,7 +759,37 @@ $("fileRestore").addEventListener("change", async (e)=>{
     renderInicio(); renderAdd(); renderMovs(); renderFijos(); renderListas();
   }catch(err){alert("No se pudo importar.");}
   e.target.value="";
-});
+});// ---------- GRÁFICA ----------
+let chartMain;
+
+function initChart(){
+  const ctx = document.getElementById("chartMain");
+  if(!ctx) return;
+
+  chartMain = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Balance",
+        data: [],
+        borderColor: "#2d6bff",
+        backgroundColor: "rgba(45,107,255,0.2)",
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
   // init
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -764,6 +800,7 @@ $("fileRestore").addEventListener("change", async (e)=>{
   $("monthPick").value = monthISO();
   ensureMonthlyFixedGenerated($("monthPick").value);
   renderInicio();
+initChart();
 </script>
 
 </body>
