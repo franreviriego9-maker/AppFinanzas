@@ -433,7 +433,8 @@ ensureOptions($("fTag"), state.tags, true);
 }
 function applyInicioFilter(){
   const list=filterTx({from:$("fFrom").value||null,to:$("fTo").value||null,tag:$("fTag").value||"all",type:$("fType").value||"all"});
-    // actualizar gráfica según filtro
+  toast(`Filtro: ${$("fTag").value} · ${list.length} movs`);
+  // actualizar gráfica según filtro
   if(chartMain){
     const dailyNet = new Map();
 
