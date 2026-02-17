@@ -433,7 +433,28 @@ ensureOptions($("fTag"), state.tags, true);
 }
 function applyInicioFilter(){
   const list=filterTx({from:$("fFrom").value||null,to:$("fTo").value||null,tag:$("fTag").value||"all",type:$("fType").value||"all"});
-  const sums=sumTx(list);
+    // actualizar gráfica según filtro
+  if(chartMain){
+    const dailyNet = new Map();
+
+    for(const t of list){
+      const net = (t.type === "income") ? t.amount : -t.amount;
+      dailyNet.set(t.date, (dailyNet.get(t.date) || 0) + net);
+    }
+
+    const labels = Array.from(dailyNet.keys()).sort();
+
+    let running = 0;
+    const data = labels.map(d => {
+      running += dailyNet.get(d) || 0;
+      return Math.round(running * 100) / 100;
+    });
+
+    chartMain.data.labels = labels;
+    chartMain.data.datasets[0].data = data;
+    chartMain.update();
+  }
+const sums=sumTx(list);
   $("fltIncome").textContent=fmtEUR.format(sums.income);
   $("fltExpense").textContent=fmtEUR.format(sums.expense);
   $("fltNet").textContent=`Balance: ${fmtEUR.format(sums.net)}`;
