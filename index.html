@@ -154,7 +154,6 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
     </div>
   </section>
 
-  <!-- (Resto de secciones igual que tu versión) -->
   <section id="view-add" class="view" style="display:none">
     <div class="card">
       <h2>Añadir movimiento</h2>
@@ -394,7 +393,7 @@ function setActiveView(view){
   window.scrollTo({top:0,behavior:"instant"});
 }
 
-/* ------------------- GRÁFICA (intuitiva) ------------------- */
+/* ------------------- GRÁFICA (profesional) ------------------- */
 let chartMain;
 let chartMode = "month"; // "month" | "filter"
 
@@ -410,6 +409,7 @@ function addDays(iso, n){
   d.setDate(d.getDate()+n);
   return toISODate(d);
 }
+
 function buildSeriesForRange(list, startISO, endISO){
   const byDay = new Map();
   for(const t of list){
@@ -426,15 +426,21 @@ function buildSeriesForRange(list, startISO, endISO){
   const balanceLine = [];
 
   let running = 0;
-
   let cur = startISO;
+
   while(cur <= endISO){
     labels.push(cur);
     const d = byDay.get(cur) || {income:0, expense:0};
-    incomeBars.push(Math.round(d.income*100)/100);
-    expenseBars.push(Math.round(d.expense*100)/100);
-    running += (d.income - d.expense);
+
+    const inc = Math.round(d.income*100)/100;
+    const expNeg = -Math.round(d.expense*100)/100; // NEGATIVO
+
+    incomeBars.push(inc);
+    expenseBars.push(expNeg);
+
+    running += (inc + expNeg); // inc - expense
     balanceLine.push(Math.round(running*100)/100);
+
     cur = addDays(cur, 1);
   }
 
@@ -472,9 +478,9 @@ function applySeriesToChart(series){
   if(!chartMain) return;
   chartMain.data.labels = series.labels;
 
-  chartMain.data.datasets[0].data = series.incomeBars;   // Ingresos
-  chartMain.data.datasets[1].data = series.expenseBars;  // Gastos
-  chartMain.data.datasets[2].data = series.balanceLine;  // Balance acumulado
+  chartMain.data.datasets[0].data = series.incomeBars;   // Ingresos (+)
+  chartMain.data.datasets[1].data = series.expenseBars;  // Gastos (-)
+  chartMain.data.datasets[2].data = series.balanceLine;  // Balance acumulado (línea)
 
   chartMain.update();
 }
@@ -482,6 +488,11 @@ function applySeriesToChart(series){
 function initChart(){
   const canvas = document.getElementById("chartMain");
   if(!canvas) return;
+
+  if(chartMain){
+    chartMain.destroy();
+    chartMain = null;
+  }
 
   chartMain = new Chart(canvas, {
     data: {
@@ -491,21 +502,32 @@ function initChart(){
           type: "bar",
           label: "Ingresos",
           data: [],
-          borderWidth: 0
+          yAxisID: "y",
+          borderWidth: 0,
+          borderRadius: 6,
+          barPercentage: 0.9,
+          categoryPercentage: 0.75
         },
         {
           type: "bar",
           label: "Gastos",
           data: [],
-          borderWidth: 0
+          yAxisID: "y",
+          borderWidth: 0,
+          borderRadius: 6,
+          barPercentage: 0.9,
+          categoryPercentage: 0.75
         },
         {
           type: "line",
           label: "Balance acumulado",
           data: [],
+          yAxisID: "y1",
           tension: 0.25,
-          pointRadius: 0,
-          borderWidth: 2
+          pointRadius: 2,
+          pointHoverRadius: 4,
+          borderWidth: 2,
+          fill: false
         }
       ]
     },
@@ -517,24 +539,65 @@ function initChart(){
         legend: { display: true },
         tooltip: {
           callbacks: {
+            title: (items) => {
+              const label = items?.[0]?.label || "";
+              if(/^\d{4}-\d{2}-\d{2}$/.test(label)){
+                return `${label.slice(8,10)}/${label.slice(5,7)}`;
+              }
+              return label;
+            },
             label: (ctx) => {
-              const v = ctx.parsed?.y ?? 0;
+              const v = Number(ctx.parsed?.y ?? 0);
+              if(ctx.dataset.label === "Gastos"){
+                return `Gastos: ${fmtEUR.format(Math.abs(v))}`;
+              }
               return `${ctx.dataset.label}: ${fmtEUR.format(v)}`;
+            },
+            afterBody: (items) => {
+              const i = items?.[0]?.dataIndex ?? -1;
+              if(i < 0 || !chartMain) return "";
+
+              const income = Number(chartMain.data.datasets[0].data[i] ?? 0);
+              const expenseNeg = Number(chartMain.data.datasets[1].data[i] ?? 0); // negativo
+              const net = income + expenseNeg; // income - expense
+              const bal = Number(chartMain.data.datasets[2].data[i] ?? 0);
+
+              return [
+                `Neto del día: ${fmtEUR.format(net)}`,
+                `Balance acumulado: ${fmtEUR.format(bal)}`
+              ];
             }
           }
         }
       },
       scales: {
         x: {
+          grid: { display: false },
           ticks: {
             callback: function(value){
               const label = this.getLabelForValue(value);
-              return label ? label.slice(8,10) : "";
-            }
+              if(!label) return "";
+              return label.slice(8,10) + "/" + label.slice(5,7); // DD/MM
+            },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 12
           }
         },
         y: {
-          beginAtZero: false
+          position: "left",
+          title: { display: true, text: "Ingresos / Gastos" },
+          ticks: {
+            callback: (v) => `€${Number(v).toFixed(0)}`
+          }
+        },
+        y1: {
+          position: "right",
+          title: { display: true, text: "Balance acumulado" },
+          grid: { drawOnChartArea: false },
+          ticks: {
+            callback: (v) => `€${Number(v).toFixed(0)}`
+          }
         }
       }
     }
@@ -566,8 +629,6 @@ function renderInicio(){
   if(!$("fTo").value) $("fTo").value=todayISO();
   if(!$("fFrom").value){const d=new Date();d.setDate(d.getDate()-6);$("fFrom").value=d.toISOString().slice(0,10);}
 
-  // Si estoy en modo mes, actualizo el gráfico del mes.
-  // Si estoy en modo filtro, NO lo piso.
   if(chartMain && chartMode==="month"){
     updateChartForMonth(month);
   }
@@ -656,7 +717,7 @@ function deleteFiltered(){
   }
 }
 
-function renderFijos(){ /* igual que tu versión */ 
+function renderFijos(){
   ensureOptions($("fxTag"), state.tags, false);
   ensureOptions($("fxAccount"), state.accounts, false);
   if(!$("fxType").value) $("fxType").value="expense";
@@ -729,7 +790,7 @@ function renderFijos(){ /* igual que tu versión */
   });
 }
 
-function renderListas(){ /* igual que tu versión */
+function renderListas(){
   const tagWrap=$("tagList"); tagWrap.innerHTML="";
   const tags=[...state.tags].sort((a,b)=>a.localeCompare(b,"es"));
   for(const tag of tags){
@@ -782,7 +843,7 @@ function toast(msg){
   setTimeout(()=>{t.remove();},2200);
 }
 
-/* ---------- Voz (tu versión, pero arreglando regex de palabra) ---------- */
+/* ---------- Voz ---------- */
 let speechRec=null;
 let isListening=false;
 function supportsSpeech(){ return ("webkitSpeechRecognition" in window) || ("SpeechRecognition" in window); }
@@ -994,7 +1055,6 @@ initChart();
 chartMode="month";
 renderInicio();
 updateChartForMonth($("monthPick").value);
-
 </script>
 </body>
 </html>
