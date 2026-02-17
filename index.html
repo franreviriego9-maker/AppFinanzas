@@ -379,6 +379,31 @@ function setActiveView(view){
   if(view==="listas") renderListas();
   window.scrollTo({top:0,behavior:"instant"});
 }
+// --- Datos para la gráfica (balance acumulado por día) ---
+function buildChartSeriesForMonth(monthYYYYMM){
+  const monthTx = state.tx
+    .filter(t => t.date && t.date.startsWith(monthYYYYMM))
+    .slice()
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  const dailyNet = new Map();
+
+  for(const t of monthTx){
+    const net = (t.type === "income") ? t.amount : -t.amount;
+    dailyNet.set(t.date, (dailyNet.get(t.date) || 0) + net);
+  }
+
+  const labels = Array.from(dailyNet.keys()).sort();
+
+  let running = 0;
+
+  const data = labels.map(d => {
+    running += dailyNet.get(d) || 0;
+    return Math.round(running * 100) / 100;
+  });
+
+  return { labels, data };
+}
 
 function renderInicio(){
   if(!$("monthPick").value) $("monthPick").value=monthISO();
@@ -395,7 +420,14 @@ function renderInicio(){
   const saveRate=sums.income>0?Math.round((sums.net/sums.income)*100):0;
   $("kpiSaveRate").textContent=`${saveRate}%`;
   $("kpiBalanceSub").textContent=`${monthTx.length} movimientos${createdFixed?` · +${createdFixed} fijos`:""}`;
-  ensureOptions($("fTag"), state.tags, true);
+    // actualizar gráfica (si ya existe)
+  if(chartMain){
+    const series = buildChartSeriesForMonth(month);
+    chartMain.data.labels = series.labels;
+    chartMain.data.datasets[0].data = series.data;
+    chartMain.update();
+  }
+ensureOptions($("fTag"), state.tags, true);
   if(!$("fTo").value) $("fTo").value=todayISO();
   if(!$("fFrom").value){const d=new Date();d.setDate(d.getDate()-6);$("fFrom").value=d.toISOString().slice(0,10);}
 }
@@ -801,6 +833,7 @@ function initChart(){
   ensureMonthlyFixedGenerated($("monthPick").value);
   renderInicio();
 initChart();
+renderInicio();
 </script>
 
 </body>
