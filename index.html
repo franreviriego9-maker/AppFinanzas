@@ -4,11 +4,13 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>Finanzas</title>
-<meta name="theme-color" content="#0b1220"/>
+
 <link rel="manifest" href="./manifest.json"/>
 <link rel="apple-touch-icon" href="./icon-180.png"/>
+<meta name="theme-color" content="#0b1220"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+
 <style>
 :root{--bg:#070b12;--p:#0b1220;--p2:#0d162a;--t:#e8eefc;--m:#93a4c7;--l:rgba(255,255,255,.10);--b:#2d6bff;--b2:#1b4fe6;--g:#33d17a;--r:#ff5c7a;--sh:0 10px 30px rgba(0,0,0,.35);--rad:22px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;}
 *{box-sizing:border-box}html,body{height:100%}
@@ -59,12 +61,14 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
 .right{text-align:right}
 .empty{padding:14px;border-radius:16px;border:1px dashed rgba(255,255,255,.18);color:var(--m);background:rgba(255,255,255,.02);line-height:1.35;font-size:13px}
 .toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:rgba(11,18,32,.92);border:1px solid rgba(255,255,255,.14);color:var(--t);padding:10px 12px;border-radius:14px;box-shadow:var(--sh);z-index:200;max-width:92vw;font-size:13px}
+
+/* selector de modo de gráfica */
+.chartModes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+.chip{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--m);padding:8px 10px;border-radius:999px;font-size:12px;cursor:pointer}
+.chip.active{color:var(--t);border-color:rgba(45,107,255,.40);background:rgba(45,107,255,.12)}
 </style>
-  <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#0B1B3A">
 </head>
-<meta name="theme-color" content="#0B1B3A">
->
+
 <body>
 <header>
   <div class="app">
@@ -105,16 +109,30 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
             <input type="month" id="monthPick" style="max-width:170px"/>
           </div>
         </div>
+
         <div class="kpis" style="margin-top:10px">
           <div class="kpi"><div class="label">Ingresos</div><div class="value good" id="kpiIncome">€0</div></div>
           <div class="kpi"><div class="label">Gastos</div><div class="value bad" id="kpiExpense">€0</div></div>
           <div class="kpi"><div class="label">Balance</div><div class="value" id="kpiBalance">€0</div><div class="muted" style="font-size:12px;margin-top:2px" id="kpiBalanceSub">—</div></div>
           <div class="kpi"><div class="label">% Ahorro</div><div class="value" id="kpiSaveRate">0%</div><div class="muted" style="font-size:12px;margin-top:2px">sobre ingresos</div></div>
-        </div><div class="hr"></div>
-<h2 style="margin-top:0">Gráfica</h2>
-<div style="height:220px">
-  <canvas id="chartMain"></canvas>
-</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row" style="justify-content:space-between;align-items:flex-end;gap:10px">
+          <h2 style="margin:0">Gráfica</h2>
+          <div class="chartModes">
+            <button class="chip active" id="modeBalance">Balance</button>
+            <button class="chip" id="modeFlow">Flujo</button>
+            <button class="chip" id="modeTags">Etiquetas</button>
+          </div>
+        </div>
+
+        <div class="muted" style="font-size:12px;margin-top:6px" id="chartSubtitle">Balance acumulado en el periodo</div>
+
+        <div style="height:240px;margin-top:10px">
+          <canvas id="chartMain"></canvas>
+        </div>
 
         <div class="actions" style="margin-top:12px">
           <button class="btn primary" id="btnVoiceHome">🎙️ Apuntar por voz</button>
@@ -265,16 +283,22 @@ th{color:var(--m);font-weight:600;background:rgba(255,255,255,.03)}
   <button class="navBtn" data-view="fijos">Fijos</button>
   <button class="navBtn" data-view="listas">Listas</button>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 const KEY="finanzas_pwa_v3";
+const UI_KEY="finanzas_ui_v1";
+
 const defaultState={
   tags:["Supermercado","Restaurantes","Pubs","Café","Gasolina","Transporte","Alquiler","Casa facturas","Suscripciones","Seguro coche","Letra coche","Salud","Ropa","Ocio","Imprevistos","Ahorro","Otros"],
   accounts:["Banco","Tarjeta","Efectivo"],
   tx:[],
   fixed:[]
 };
+
+const defaultUI={ chartMode:"balance" }; // balance | flow | tags
+
 function loadState(){
   try{
     const raw=localStorage.getItem(KEY);
@@ -287,8 +311,22 @@ function loadState(){
     return s;
   }catch{return structuredClone(defaultState);}
 }
+function loadUI(){
+  try{
+    const raw=localStorage.getItem(UI_KEY);
+    if(!raw) return structuredClone(defaultUI);
+    const u=JSON.parse(raw);
+    if(!u || typeof u!=="object") return structuredClone(defaultUI);
+    if(!["balance","flow","tags"].includes(u.chartMode)) u.chartMode="balance";
+    return u;
+  }catch{return structuredClone(defaultUI);}
+}
+
 let state=loadState();
+let ui=loadUI();
+
 function saveState(){localStorage.setItem(KEY, JSON.stringify(state));}
+function saveUI(){localStorage.setItem(UI_KEY, JSON.stringify(ui));}
 
 const fmtEUR=new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"});
 const $=id=>document.getElementById(id);
@@ -298,11 +336,12 @@ const monthISO=()=> new Date().toISOString().slice(0,7);
 function parseAmount(str){
   if(typeof str!=="string") return NaN;
   const clean=str.trim().replaceAll("€","").replaceAll(" ","");
-  const norm=clean.replaceAll(".","").replace(",","."); // ES
+  const norm=clean.replaceAll(".","").replace(",",".");
   const v=Number(norm);
   return Number.isFinite(v)?v:NaN;
 }
 function escapeHtml(s){return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
+
 function ensureOptions(selectEl, options, includeAll=false){
   const curr=selectEl.value;
   selectEl.innerHTML="";
@@ -313,6 +352,7 @@ function ensureOptions(selectEl, options, includeAll=false){
   options.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;selectEl.appendChild(o);});
   if(curr && [...selectEl.options].some(o=>o.value===curr)) selectEl.value=curr;
 }
+
 function daysInMonth(y,m){return new Date(y,m,0).getDate();}
 function dateForMonthDay(monthYYYYMM, day){
   const y=Number(monthYYYYMM.slice(0,4));
@@ -321,6 +361,7 @@ function dateForMonthDay(monthYYYYMM, day){
   const d=Math.min(Math.max(1,day),max);
   return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 }
+
 function ensureMonthlyFixedGenerated(monthYYYYMM){
   const existing=new Set(state.tx.filter(t=>t.fixedId && t.fixedMonth).map(t=>`${t.fixedId}|${t.fixedMonth}`));
   let created=0;
@@ -345,6 +386,7 @@ function ensureMonthlyFixedGenerated(monthYYYYMM){
   if(created) saveState();
   return created;
 }
+
 function filterTx({from=null,to=null,tag="all",type="all",search=""}={}){
   const fFrom=from?new Date(from):null;
   const fTo=to?new Date(to):null;
@@ -379,91 +421,284 @@ function setActiveView(view){
   if(view==="listas") renderListas();
   window.scrollTo({top:0,behavior:"instant"});
 }
-// --- Datos para la gráfica (balance acumulado por día) ---
-function buildChartSeriesForMonth(monthYYYYMM){
-  const monthTx = state.tx
-    .filter(t => t.date && t.date.startsWith(monthYYYYMM))
-    .slice()
-    .sort((a,b) => a.date.localeCompare(b.date));
 
-  const dailyNet = new Map();
+/* ========= GRÁFICAS (3 MODOS) ========= */
+let chartMain=null;
 
-  for(const t of monthTx){
-    const net = (t.type === "income") ? t.amount : -t.amount;
-    dailyNet.set(t.date, (dailyNet.get(t.date) || 0) + net);
+/* contexto actual de la gráfica */
+let chartCtx = { kind:"month", month: monthISO(), list: [] }; // kind: month|filter
+
+function dateLabelShort(iso){
+  // iso "YYYY-MM-DD" -> "DD/MM"
+  if(!iso || iso.length<10) return iso;
+  return `${iso.slice(8,10)}/${iso.slice(5,7)}`;
+}
+
+function buildDailyBuckets(list){
+  // devuelve Map fecha -> {income, expense, net}
+  const m = new Map();
+  for(const t of list){
+    const d=t.date;
+    if(!m.has(d)) m.set(d, {income:0, expense:0, net:0});
+    const o=m.get(d);
+    if(t.type==="income"){ o.income += t.amount; o.net += t.amount; }
+    else { o.expense += t.amount; o.net -= t.amount; }
   }
+  return m;
+}
 
-  const labels = Array.from(dailyNet.keys()).sort();
-
+function seriesBalanceCumulative(list){
+  const daily = buildDailyBuckets(list);
+  const dates = Array.from(daily.keys()).sort();
   let running = 0;
-
-  const data = labels.map(d => {
-    running += dailyNet.get(d) || 0;
-    return Math.round(running * 100) / 100;
+  const labels = dates.map(dateLabelShort);
+  const data = dates.map(d=>{
+    running += (daily.get(d)?.net || 0);
+    return Math.round(running*100)/100;
   });
-
   return { labels, data };
 }
+
+function seriesFlowDaily(list){
+  const daily = buildDailyBuckets(list);
+  const dates = Array.from(daily.keys()).sort();
+  const labels = dates.map(dateLabelShort);
+
+  const income = dates.map(d => Math.round((daily.get(d)?.income || 0)*100)/100);
+  // gastos como negativo para que se vean hacia abajo (intuitivo)
+  const expense = dates.map(d => -Math.round((daily.get(d)?.expense || 0)*100)/100);
+
+  return { labels, income, expense };
+}
+
+function seriesExpensesByTag(list){
+  const byTag = new Map();
+  for(const t of list){
+    if(t.type!=="expense") continue;
+    byTag.set(t.tag, (byTag.get(t.tag) || 0) + t.amount);
+  }
+  const arr = Array.from(byTag.entries())
+    .map(([tag, amt]) => [tag, Math.round(amt*100)/100])
+    .sort((a,b)=> b[1]-a[1])
+    .slice(0, 10); // top 10
+
+  return {
+    labels: arr.map(x=>x[0]),
+    data: arr.map(x=>x[1])
+  };
+}
+
+function setChartMode(mode){
+  ui.chartMode = mode;
+  saveUI();
+  $("modeBalance").classList.toggle("active", mode==="balance");
+  $("modeFlow").classList.toggle("active", mode==="flow");
+  $("modeTags").classList.toggle("active", mode==="tags");
+  drawChart();
+}
+
+function drawChart(){
+  if(!chartMain) return;
+
+  // decide lista según contexto
+  const list = (chartCtx.kind==="filter")
+    ? chartCtx.list
+    : state.tx.filter(t => t.date && t.date.startsWith(chartCtx.month)).slice().sort((a,b)=>a.date.localeCompare(b.date));
+
+  const isFilter = chartCtx.kind==="filter";
+  const subtitleBase = isFilter ? "Según filtro aplicado" : "Del mes seleccionado";
+
+  // si no hay datos, limpia
+  if(!list.length){
+    $("chartSubtitle").textContent = `${subtitleBase} · sin datos`;
+    chartMain.data.labels = [];
+    chartMain.data.datasets = [];
+    chartMain.update();
+    return;
+  }
+
+  if(ui.chartMode==="balance"){
+    $("chartSubtitle").textContent = `${subtitleBase} · balance acumulado`;
+    const s = seriesBalanceCumulative(list);
+
+    chartMain.config.type = "line";
+    chartMain.data.labels = s.labels;
+    chartMain.data.datasets = [{
+      label: "Balance acumulado",
+      data: s.data,
+      tension: 0.28,
+      borderWidth: 2,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      fill: true,
+      borderColor: (ctx)=>{
+        const v = ctx?.chart?.data?.datasets?.[0]?.data;
+        if(!v || !v.length) return "#2d6bff";
+        return (v[v.length-1] >= 0) ? "#33d17a" : "#ff5c7a";
+      },
+      backgroundColor: (ctx)=>{
+        const v = ctx?.chart?.data?.datasets?.[0]?.data;
+        if(!v || !v.length) return "rgba(45,107,255,0.18)";
+        return (v[v.length-1] >= 0) ? "rgba(51,209,122,0.12)" : "rgba(255,92,122,0.12)";
+      }
+    }];
+
+    chartMain.options.scales = {
+      x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+      y: {
+        ticks: { callback: (v)=> fmtEUR.format(v) },
+        grid: { color: "rgba(255,255,255,.08)" }
+      }
+    };
+
+  } else if(ui.chartMode==="flow"){
+    $("chartSubtitle").textContent = `${subtitleBase} · ingresos arriba, gastos abajo`;
+    const s = seriesFlowDaily(list);
+
+    chartMain.config.type = "bar";
+    chartMain.data.labels = s.labels;
+    chartMain.data.datasets = [
+      {
+        label: "Ingresos",
+        data: s.income,
+        backgroundColor: "rgba(51,209,122,0.22)",
+        borderColor: "#33d17a",
+        borderWidth: 1
+      },
+      {
+        label: "Gastos",
+        data: s.expense,
+        backgroundColor: "rgba(255,92,122,0.22)",
+        borderColor: "#ff5c7a",
+        borderWidth: 1
+      }
+    ];
+
+    chartMain.options.scales = {
+      x: { stacked: false, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+      y: {
+        ticks: { callback: (v)=> fmtEUR.format(v) },
+        grid: { color: "rgba(255,255,255,.08)" }
+      }
+    };
+
+  } else if(ui.chartMode==="tags"){
+    $("chartSubtitle").textContent = `${subtitleBase} · top gastos por etiqueta`;
+    const s = seriesExpensesByTag(list);
+
+    chartMain.config.type = "bar";
+    chartMain.data.labels = s.labels;
+    chartMain.data.datasets = [{
+      label: "Gasto",
+      data: s.data,
+      backgroundColor: "rgba(45,107,255,0.22)",
+      borderColor: "#2d6bff",
+      borderWidth: 1
+    }];
+
+    chartMain.options.indexAxis = "y";
+    chartMain.options.scales = {
+      x: {
+        ticks: { callback: (v)=> fmtEUR.format(v) },
+        grid: { color: "rgba(255,255,255,.08)" }
+      },
+      y: { grid: { display:false } }
+    };
+  }
+
+  chartMain.options.plugins.tooltip = {
+    callbacks: {
+      label: (ctx)=>{
+        const label = ctx.dataset.label ? (ctx.dataset.label + ": ") : "";
+        const v = ctx.raw;
+        // en flow, gastos son negativos -> mostrar positivos al usuario
+        const shown = (ui.chartMode==="flow" && ctx.dataset.label==="Gastos") ? Math.abs(v) : v;
+        return label + fmtEUR.format(shown);
+      }
+    }
+  };
+
+  // reset indexAxis si no es tags
+  if(ui.chartMode!=="tags") chartMain.options.indexAxis = "x";
+
+  chartMain.update();
+}
+
+function initChart(){
+  const canvas = $("chartMain");
+  if(!canvas) return;
+
+  chartMain = new Chart(canvas, {
+    type: "line",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, labels: { color: "#93a4c7" } },
+        tooltip: { enabled: true }
+      },
+      scales: {
+        x: { ticks: { color: "#93a4c7" }, grid: { display:false } },
+        y: { ticks: { color: "#93a4c7" }, grid: { color:"rgba(255,255,255,.08)" } }
+      }
+    }
+  });
+}
+
+/* ========= PANTALLAS ========= */
 
 function renderInicio(){
   if(!$("monthPick").value) $("monthPick").value=monthISO();
   $("pillMonth").textContent=$("monthPick").value;
+
   const month=$("monthPick").value;
+  chartCtx.kind = "month";
+  chartCtx.month = month;
+
   const createdFixed=ensureMonthlyFixedGenerated(month);
   const monthTx=state.tx.filter(t=>t.date.startsWith(month));
   const sums=sumTx(monthTx);
+
   $("kpiIncome").textContent=fmtEUR.format(sums.income);
   $("kpiExpense").textContent=fmtEUR.format(sums.expense);
   $("kpiBalance").textContent=fmtEUR.format(sums.net);
   $("kpiBalance").classList.toggle("good", sums.net>=0);
   $("kpiBalance").classList.toggle("bad", sums.net<0);
+
   const saveRate=sums.income>0?Math.round((sums.net/sums.income)*100):0;
   $("kpiSaveRate").textContent=`${saveRate}%`;
   $("kpiBalanceSub").textContent=`${monthTx.length} movimientos${createdFixed?` · +${createdFixed} fijos`:""}`;
-    // actualizar gráfica (si ya existe)
-  if(chartMain){
-    const series = buildChartSeriesForMonth(month);
-    chartMain.data.labels = series.labels;
-    chartMain.data.datasets[0].data = series.data;
-    chartMain.update();
-  }
-ensureOptions($("fTag"), state.tags, true);
+
+  ensureOptions($("fTag"), state.tags, true);
   if(!$("fTo").value) $("fTo").value=todayISO();
   if(!$("fFrom").value){const d=new Date();d.setDate(d.getDate()-6);$("fFrom").value=d.toISOString().slice(0,10);}
+
+  drawChart();
 }
+
 function applyInicioFilter(){
-  console.log("TAG SELECT:", $("fTag").value);
-console.log("STATE TAGS:", state.tags);
-const list=filterTx({from:$("fFrom").value||null,to:$("fTo").value||null,tag:$("fTag").value||"all",type:$("fType").value||"all"});
+  const list=filterTx({
+    from:$("fFrom").value||null,
+    to:$("fTo").value||null,
+    tag:$("fTag").value||"all",
+    type:$("fType").value||"all"
+  });
+
+  chartCtx.kind = "filter";
+  chartCtx.list = list;
+
   toast(`Filtro: ${$("fTag").value} · ${list.length} movs`);
-  // actualizar gráfica según filtro
-  if(chartMain){
-    const dailyNet = new Map();
+  drawChart();
 
-    for(const t of list){
-      const net = (t.type === "income") ? t.amount : -t.amount;
-      dailyNet.set(t.date, (dailyNet.get(t.date) || 0) + net);
-    }
-
-    const labels = Array.from(dailyNet.keys()).sort();
-
-    let running = 0;
-    const data = labels.map(d => {
-      running += dailyNet.get(d) || 0;
-      return Math.round(running * 100) / 100;
-    });
-
-    chartMain.data.labels = labels;
-    chartMain.data.datasets[0].data = data;
-    chartMain.update();
-  }
-const sums=sumTx(list);
+  const sums=sumTx(list);
   $("fltIncome").textContent=fmtEUR.format(sums.income);
   $("fltExpense").textContent=fmtEUR.format(sums.expense);
   $("fltNet").textContent=`Balance: ${fmtEUR.format(sums.net)}`;
   $("fltCount").textContent=`${sums.count} movimientos`;
   $("fltPreviewEmpty").style.display=sums.count?"none":"";
 }
+
 function renderAdd(){
   ensureOptions($("aTag"), state.tags, false);
   ensureOptions($("aAccount"), state.accounts, false);
@@ -481,25 +716,31 @@ function addTx(){
   saveState();
   return true;
 }
+
 let lastMovFilter=null;
+
 function renderMovs(){
   ensureOptions($("mTag"), state.tags, true);
   if(!$("mTo").value) $("mTo").value=todayISO();
   if(!$("mFrom").value){const d=new Date();d.setMonth(d.getMonth()-1);$("mFrom").value=d.toISOString().slice(0,10);}
   applyMovsFilter();
 }
+
 function applyMovsFilter(){
   const filter={from:$("mFrom").value||null,to:$("mTo").value||null,tag:$("mTag").value||"all",type:$("mType").value||"all",search:$("mSearch").value||""};
   lastMovFilter=filter;
   const list=filterTx(filter);
   const sums=sumTx(list);
+
   $("movCountPill").textContent=`${list.length} items`;
   $("movIncome").textContent=`Ingresos: ${fmtEUR.format(sums.income)}`;
   $("movExpense").textContent=`Gastos: ${fmtEUR.format(sums.expense)}`;
   $("movNet").textContent=`Balance: ${fmtEUR.format(sums.net)}`;
+
   const tb=$("movTbody");tb.innerHTML="";
   if(!list.length){$("movEmpty").style.display="";return;}
   $("movEmpty").style.display="none";
+
   for(const t of list){
     const tr=document.createElement("tr");
     const tipo=t.type==="income"?"Ingreso":"Gasto";
@@ -507,6 +748,7 @@ function applyMovsFilter(){
     tr.innerHTML=`<td>${t.date}</td><td>${pill}</td><td><span class="pill blue">${escapeHtml(t.tag)}</span></td><td>${escapeHtml(t.account)}</td><td class="right">${fmtEUR.format(t.amount)}</td><td class="muted">${escapeHtml(t.note||"")}</td><td class="right"><button class="btn" style="padding:8px 10px;border-radius:12px;font-size:12px" data-del="${t.id}">Borrar</button></td>`;
     tb.appendChild(tr);
   }
+
   tb.querySelectorAll("[data-del]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id=btn.getAttribute("data-del");
@@ -517,6 +759,7 @@ function applyMovsFilter(){
     });
   });
 }
+
 function deleteFiltered(){
   if(!lastMovFilter) return;
   const list=filterTx(lastMovFilter);
@@ -527,15 +770,18 @@ function deleteFiltered(){
     saveState(); renderMovs(); renderInicio();
   }
 }
+
 function renderFijos(){
   ensureOptions($("fxTag"), state.tags, false);
   ensureOptions($("fxAccount"), state.accounts, false);
   if(!$("fxType").value) $("fxType").value="expense";
   if(!$("fxDay").value) $("fxDay").value="1";
   $("fxCountPill").textContent=`${state.fixed.length}`;
+
   const wrap=$("fxList");wrap.innerHTML="";
   if(!state.fixed.length){$("fxEmpty").style.display="";return;}
   $("fxEmpty").style.display="none";
+
   const sorted=[...state.fixed].sort((a,b)=>(a.day-b.day)||((a.name||"").localeCompare((b.name||""),"es")));
   for(const fx of sorted){
     const row=document.createElement("div");
@@ -562,6 +808,7 @@ function renderFijos(){
       </div>`;
     wrap.appendChild(row);
   }
+
   wrap.querySelectorAll("[data-fx-del]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id=btn.getAttribute("data-fx-del");
@@ -573,6 +820,7 @@ function renderFijos(){
       }
     });
   });
+
   wrap.querySelectorAll("[data-fx-toggle]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id=btn.getAttribute("data-fx-toggle");
@@ -582,11 +830,13 @@ function renderFijos(){
       saveState(); renderFijos();
     });
   });
+
   wrap.querySelectorAll("[data-fx-edit]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id=btn.getAttribute("data-fx-edit");
       const fx=state.fixed.find(x=>x.id===id);
       if(!fx) return;
+
       const name=prompt("Nombre del fijo:", fx.name||""); if(name===null) return;
       const amountStr=prompt("Importe (€):", String(fx.amount).replace(".",",")); if(amountStr===null) return;
       const amount=parseAmount(amountStr); if(!Number.isFinite(amount)||amount<=0){alert("Importe inválido.");return;}
@@ -594,11 +844,13 @@ function renderFijos(){
       const day=Math.min(31, Math.max(1, parseInt(dayStr,10)||fx.day));
       const typeStr=prompt('Tipo ("gasto" o "ingreso"):', fx.type==="income"?"ingreso":"gasto"); if(typeStr===null) return;
       const type=(typeStr.trim().toLowerCase().startsWith("i"))?"income":"expense";
+
       fx.name=name.trim(); fx.amount=amount; fx.day=day; fx.type=type;
       saveState(); renderFijos(); renderInicio(); renderMovs();
     });
   });
 }
+
 function renderListas(){
   const tagWrap=$("tagList"); tagWrap.innerHTML="";
   const tags=[...state.tags].sort((a,b)=>a.localeCompare(b,"es"));
@@ -620,6 +872,7 @@ function renderListas(){
       }
     });
   });
+
   const accWrap=$("accList"); accWrap.innerHTML="";
   const accs=[...state.accounts].sort((a,b)=>a.localeCompare(b,"es"));
   for(const acc of accs){
@@ -642,9 +895,10 @@ function renderListas(){
   });
 }
 
-// ---------- Voz ----------
+/* ========= Voz ========= */
 let speechRec=null;
 let isListening=false;
+
 function toast(msg){
   const t=document.createElement("div");
   t.className="toast";
@@ -654,55 +908,67 @@ function toast(msg){
   setTimeout(()=>{t.remove();},2200);
 }
 function supportsSpeech(){ return ("webkitSpeechRecognition" in window) || ("SpeechRecognition" in window); }
+
 function monthNameToNum(name){
   const m=name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
   const map={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
   return map[m]||null;
 }
+
 function parseSpokenToTx(text){
   const raw=(text||"").trim(); if(!raw) return null;
   const norm=raw.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+
   let type="expense";
-  if(/ingreso(s)?/.test(norm) || /n[oó]mina/.test(norm)) type="income";
-  if(/gasto(s)?/.test(norm)) type="expense";
+  if(/\bingreso(s)?\b/.test(norm) || /\bn[oó]mina\b/.test(norm)) type="income";
+  if(/\bgasto(s)?\b/.test(norm)) type="expense";
+
   const amtMatch=norm.match(/(\d{1,6}(?:[.,]\d{1,2})?)/);
   if(!amtMatch) return null;
+
   const amount=parseAmount(amtMatch[1]);
   if(!Number.isFinite(amount)||amount<=0) return null;
+
   let date=todayISO();
-  if(/ayer/.test(norm)){const d=new Date();d.setDate(d.getDate()-1);date=d.toISOString().slice(0,10);}
-  if(/manana|mañana/.test(norm)){const d=new Date();d.setDate(d.getDate()+1);date=d.toISOString().slice(0,10);}
-  let m=norm.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+  if(/\bayer\b/.test(norm)){const d=new Date();d.setDate(d.getDate()-1);date=d.toISOString().slice(0,10);}
+  if(/\bmanana\b|\bmañana\b/.test(norm)){const d=new Date();d.setDate(d.getDate()+1);date=d.toISOString().slice(0,10);}
+
+  let m=norm.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
   if(m){
     let d=parseInt(m[1],10); let mo=parseInt(m[2],10); let y=m[3]?parseInt(m[3],10):(new Date()).getFullYear();
     if(y<100) y+=2000;
     if(mo>=1&&mo<=12&&d>=1&&d<=31){ const max=daysInMonth(y,mo); d=Math.min(d,max); date=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
   }else{
-    m=norm.match(/(\d{1,2})\s*(?:de)?\s*(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s*(?:de)?\s*(\d{4}))?/);
+    m=norm.match(/\b(\d{1,2})\s*(?:de)?\s*(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s*(?:de)?\s*(\d{4}))?\b/);
     if(m){
       let d=parseInt(m[1],10); const mo=monthNameToNum(m[2]); let y=m[3]?parseInt(m[3],10):(new Date()).getFullYear();
       if(mo){ const max=daysInMonth(y,mo); d=Math.min(Math.max(1,d),max); date=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
     }
   }
+
   const tags=state.tags||[];
-  const normNoCmd=norm.replace(/(apunta|apuntar|registr(a|ar)|anota|meter|mete)/g," ")
-                      .replace(/(euro|euros|€)/g," ")
-                      .replace(/(del|de|el|la|hoy)/g," ")
+  const normNoCmd=norm.replace(/\b(apunta|apuntar|registr(a|ar)|anota|meter|mete)\b/g," ")
+                      .replace(/\b(euro|euros|€)\b/g," ")
+                      .replace(/\b(del|de|el|la|hoy)\b/g," ")
                       .replace(/\s+/g," ").trim();
+
   let best={tag:null,score:0};
   for(const t of tags){
     const tn=t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
     if(tn && normNoCmd.includes(tn) && tn.length>best.score) best={tag:t,score:tn.length};
   }
+
   const tag=best.tag||"Otros";
   const account=state.accounts?.[0]||"Banco";
   const note=`Voz: ${raw}`;
   return {type,date,tag,account,amount,note};
 }
+
 function addTxFromVoice(tx){
   state.tx.push({id:crypto.randomUUID(),type:tx.type,date:tx.date,tag:tx.tag,account:tx.account,amount:tx.amount,note:tx.note,createdAt:Date.now()});
   saveState();
 }
+
 function startVoice(){
   if(isListening) return;
   if(!supportsSpeech()){
@@ -715,33 +981,36 @@ function startVoice(){
   speechRec.interimResults=false;
   speechRec.maxAlternatives=1;
   isListening=true;
-  if(document.getElementById("voiceStatus")) $("voiceStatus").textContent="Escuchando… di: “15 euros supermercado”";
+
+  if($("voiceStatus")) $("voiceStatus").textContent="Escuchando… di: “15 euros supermercado”";
   toast("Escuchando…");
+
   speechRec.onresult=(e)=>{
     const text=e.results?.[0]?.[0]?.transcript||"";
     const tx=parseSpokenToTx(text);
     if(!tx){
       toast("No entendí. Ej: “15 euros supermercado”.");
       isListening=false;
-      if(document.getElementById("voiceStatus")) $("voiceStatus").textContent="Ejemplos: “15 euros supermercado” · “apunta 30 euros gasolina del 15 de febrero”";
+      if($("voiceStatus")) $("voiceStatus").textContent="Ejemplos: “15 euros supermercado” · “apunta 30 euros gasolina del 15 de febrero”";
       return;
     }
     addTxFromVoice(tx);
     renderInicio();
-    if(document.getElementById("view-movs").style.display!=="none") renderMovs();
+    if($("view-movs").style.display!=="none") renderMovs();
     toast(`Añadido: ${fmtEUR.format(tx.amount)} · ${tx.tag} · ${tx.date}`);
     isListening=false;
-    if(document.getElementById("voiceStatus")) $("voiceStatus").textContent="✅ Añadido. Puedes decir otro cuando quieras.";
+    if($("voiceStatus")) $("voiceStatus").textContent="✅ Añadido. Puedes decir otro cuando quieras.";
   };
-  speechRec.onerror=()=>{isListening=false; if(document.getElementById("voiceStatus")) $("voiceStatus").textContent="No se pudo escuchar. Prueba otra vez."; toast("No se pudo escuchar.");};
+  speechRec.onerror=()=>{isListening=false; if($("voiceStatus")) $("voiceStatus").textContent="No se pudo escuchar. Prueba otra vez."; toast("No se pudo escuchar.");};
   speechRec.onend=()=>{isListening=false;};
   try{speechRec.start();}catch{isListening=false;}
 }
+
 function showVoiceHelp(){
   alert("Cómo decirlo:\n- 15 euros supermercado\n- apunta 30 euros gasolina del 15 de febrero\n- 12,30 pubs ayer\n\nSi no dices fecha, se guarda para HOY.");
 }
 
-// Eventos
+/* ========= Eventos ========= */
 document.querySelectorAll(".tab,.navBtn").forEach(b=>b.addEventListener("click", ()=>setActiveView(b.dataset.view)));
 $("btnQuickAdd").addEventListener("click", ()=>setActiveView("add"));
 $("btnVoice").addEventListener("click", startVoice);
@@ -749,20 +1018,38 @@ $("btnVoiceHome").addEventListener("click", startVoice);
 $("btnVoiceHelp").addEventListener("click", showVoiceHelp);
 $("btnGoMovs").addEventListener("click", ()=>setActiveView("movs"));
 $("btnAddFromMovs").addEventListener("click", ()=>setActiveView("add"));
-$("monthPick").addEventListener("change", ()=>{ $("pillMonth").textContent=$("monthPick").value; ensureMonthlyFixedGenerated($("monthPick").value); renderInicio(); });
+
+$("monthPick").addEventListener("change", ()=>{
+  $("pillMonth").textContent=$("monthPick").value;
+  ensureMonthlyFixedGenerated($("monthPick").value);
+  // al cambiar mes, volvemos a contexto mes (y no filtro)
+  chartCtx.kind="month";
+  chartCtx.month=$("monthPick").value;
+  renderInicio();
+});
+
 $("btnApplyFilter").addEventListener("click", applyInicioFilter);
+
 $("btnClearFilter").addEventListener("click", ()=>{
   $("fTag").value="all";$("fType").value="all";$("fFrom").value="";$("fTo").value="";
   $("fltIncome").textContent=fmtEUR.format(0);$("fltExpense").textContent=fmtEUR.format(0);
   $("fltNet").textContent=`Balance: ${fmtEUR.format(0)}`;$("fltCount").textContent="0 movimientos";
   $("fltPreviewEmpty").style.display="";
+
+  // importante: volver a la gráfica del mes
+  chartCtx.kind="month";
+  chartCtx.month=$("monthPick").value || monthISO();
+  drawChart();
 });
+
 $("btnSave").addEventListener("click", ()=>{ if(addTx()){ resetAdd(); renderInicio(); setActiveView("movs"); } });
 $("btnSaveAndAdd").addEventListener("click", ()=>{ if(addTx()){ $("aAmount").value="";$("aNote").value=""; renderInicio(); } });
 $("btnReset").addEventListener("click", resetAdd);
+
 $("btnMovApply").addEventListener("click", applyMovsFilter);
 $("btnMovClear").addEventListener("click", ()=>{$("mSearch").value="";$("mTag").value="all";$("mType").value="all";$("mFrom").value="";$("mTo").value="";applyMovsFilter();});
 $("btnDeleteFiltered").addEventListener("click", deleteFiltered);
+
 $("btnFxAdd").addEventListener("click", ()=>{
   const name=$("fxName").value.trim();
   const amount=parseAmount($("fxAmount").value);
@@ -776,6 +1063,7 @@ $("btnFxAdd").addEventListener("click", ()=>{
   alert("Fijo añadido ✅");
 });
 $("btnFxClear").addEventListener("click", ()=>{$("fxName").value="";$("fxAmount").value="";$("fxDay").value="1";$("fxType").value="expense";});
+
 $("btnAddTag").addEventListener("click", ()=>{
   const v=$("newTag").value.trim(); if(!v) return;
   if(state.tags.includes(v)){alert("Esa etiqueta ya existe.");return;}
@@ -788,12 +1076,14 @@ $("btnAddAcc").addEventListener("click", ()=>{
   state.accounts.push(v); $("newAcc").value=""; saveState();
   renderListas(); renderAdd(); renderMovs(); renderFijos();
 });
+
 $("btnWipe").addEventListener("click", ()=>{
   if(confirm("¿Seguro? Esto borra TODO en este dispositivo.")){
     state=structuredClone(defaultState); saveState();
     alert("Borrado."); renderInicio(); renderAdd(); renderMovs(); renderFijos(); renderListas();
   }
 });
+
 $("btnBackup").addEventListener("click", ()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
@@ -801,6 +1091,7 @@ $("btnBackup").addEventListener("click", ()=>{
   a.href=url; a.download=`finanzas-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
   URL.revokeObjectURL(url);
 });
+
 $("fileRestore").addEventListener("change", async (e)=>{
   const f=e.target.files?.[0]; if(!f) return;
   try{
@@ -815,51 +1106,29 @@ $("fileRestore").addEventListener("change", async (e)=>{
     renderInicio(); renderAdd(); renderMovs(); renderFijos(); renderListas();
   }catch(err){alert("No se pudo importar.");}
   e.target.value="";
-});// ---------- GRÁFICA ----------
-let chartMain;
+});
 
-function initChart(){
-  const ctx = document.getElementById("chartMain");
-  if(!ctx) return;
+/* botones modos gráfica */
+$("modeBalance").addEventListener("click", ()=>setChartMode("balance"));
+$("modeFlow").addEventListener("click", ()=>setChartMode("flow"));
+$("modeTags").addEventListener("click", ()=>setChartMode("tags"));
 
-  chartMain = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [{
-        label: "Balance",
-        data: [],
-        borderColor: "#2d6bff",
-        backgroundColor: "rgba(45,107,255,0.2)",
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true
-        }
-      }
-    }
+/* ========= init ========= */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js");
   });
 }
 
-  // init
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js");
-    });
-  }
+// UI inicial (modo)
+setChartMode(ui.chartMode);
 
-  $("monthPick").value = monthISO();
-  ensureMonthlyFixedGenerated($("monthPick").value);
-  renderInicio();
+// chart primero, luego render
 initChart();
+
+$("monthPick").value = monthISO();
+ensureMonthlyFixedGenerated($("monthPick").value);
 renderInicio();
 </script>
-
 </body>
 </html>
-
